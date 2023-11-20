@@ -16,11 +16,10 @@ import (
 	"movieexample.com/pkg/discovery"
 	"movieexample.com/pkg/discovery/consul"
 	"movieexample.com/rating/internal/controller/rating"
-	"movieexample.com/rating/internal/ingester/kafka"
+	"movieexample.com/rating/internal/repository/mysql"
 
 	// httphandler "movieexample.com/rating/internal/handler/http"
 	grpchandler "movieexample.com/rating/internal/handler/grpc"
-	"movieexample.com/rating/internal/repository/memory"
 )
 
 const serviceName = "rating"
@@ -28,11 +27,11 @@ const serviceName = "rating"
 func main() {
 	var port int
 
-	flag.IntVar(&port, "port", 8084, "API handler port")
+	flag.IntVar(&port, "port", 8082, "API handler port")
 	flag.Parse()
 	log.Printf("Starting the rating service on port %d", port)
 
-	err := godotenv.Load("../../.env")
+	err := godotenv.Load("./.env")
 	if err != nil {
 		log.Fatal("Error loading .env file")
 	}
@@ -60,14 +59,18 @@ func main() {
 
 	defer registry.Deregister(ctx, instanceID, serviceName)
 
-	repo := memory.New()
-
-	ingester, err := kafka.NewIngester(os.Getenv("RATING_SERVER_URL"), "kafka-grpc", "ratings")
+	repo, err := mysql.New()
 	if err != nil {
-		log.Fatalf("Failed to create kafak ingester: %v", err)
+		panic(err)
 	}
 
-	ctrl := rating.New(repo, ingester)
+	// ingester, err := kafka.NewIngester(os.Getenv("RATING_SERVER_URL"), "kafka-grpc", "ratings")
+	// if err != nil {
+	// 	log.Fatalf("Failed to create kafak ingester: %v", err)
+	// }
+
+	// ctrl := rating.New(repo, ingester)
+	ctrl := rating.New(repo, nil)
 	h := grpchandler.New(ctrl)
 
 	lis, err := net.Listen("tcp", fmt.Sprintf("localhost:%v", port))

@@ -6,13 +6,17 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"os"
 	"time"
 
+	"github.com/joho/godotenv"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
 	"movieexample.com/gen"
 	"movieexample.com/pkg/discovery"
 	"movieexample.com/pkg/discovery/consul"
 	"movieexample.com/rating/internal/controller/rating"
+	"movieexample.com/rating/internal/ingester/kafka"
 
 	// httphandler "movieexample.com/rating/internal/handler/http"
 	grpchandler "movieexample.com/rating/internal/handler/grpc"
@@ -24,11 +28,16 @@ const serviceName = "rating"
 func main() {
 	var port int
 
-	flag.IntVar(&port, "port", 8082, "API handler port")
+	flag.IntVar(&port, "port", 8084, "API handler port")
 	flag.Parse()
 	log.Printf("Starting the rating service on port %d", port)
 
-	registry, err := consul.NewRegistry("localhost:8500")
+	err := godotenv.Load("../../.env")
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	}
+
+	registry, err := consul.NewRegistry(os.Getenv("HASHCORP_CONSUL_URL"))
 	if err != nil {
 		panic(err)
 	}
@@ -52,7 +61,13 @@ func main() {
 	defer registry.Deregister(ctx, instanceID, serviceName)
 
 	repo := memory.New()
-	ctrl := rating.New(repo)
+
+	ingester, err := kafka.NewIngester(os.Getenv("RATING_SERVER_URL"), "kafka-grpc", "ratings")
+	if err != nil {
+		log.Fatalf("Failed to create kafak ingester: %v", err)
+	}
+
+	ctrl := rating.New(repo, ingester)
 	h := grpchandler.New(ctrl)
 
 	lis, err := net.Listen("tcp", fmt.Sprintf("localhost:%v", port))
@@ -61,6 +76,7 @@ func main() {
 	}
 
 	srv := grpc.NewServer()
+	reflection.Register(srv)
 	gen.RegisterRatingServiceServer(srv, h)
 	if err := srv.Serve(lis); err != nil {
 		panic(err)

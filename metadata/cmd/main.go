@@ -34,7 +34,7 @@ func main() {
 	// flag.Parse()
 	// log.Printf("Starting the metadata service on port %d", port)
 
-	f, err := os.Open("../configs/base.yaml")
+	f, err := os.Open("base.yaml")
 	if err != nil {
 		panic(err)
 	}

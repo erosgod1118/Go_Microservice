@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
 	"gopkg.in/yaml.v3"
 	"movieexample.com/gen"
 	"movieexample.com/movie/internal/controller/movie"
@@ -32,7 +33,7 @@ func main() {
 	// flag.Parse()
 	// log.Printf("Starting the movie service on port %d", port)
 
-	f, err := os.Open("../configs/base.yaml")
+	f, err := os.Open("./base.yaml")
 	if err != nil {
 		panic(err)
 	}
@@ -82,6 +83,7 @@ func main() {
 	}
 
 	srv := grpc.NewServer()
+	reflection.Register(srv)
 	gen.RegisterMovieServiceServer(srv, h)
 	if err := srv.Serve(lis); err != nil {
 		panic(err)

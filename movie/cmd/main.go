@@ -2,35 +2,57 @@ package main
 
 import (
 	"context"
-	"flag"
+	"os"
+
+	// "flag"
 	"fmt"
 	"log"
 	"net"
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
+	"gopkg.in/yaml.v3"
 	"movieexample.com/gen"
 	"movieexample.com/movie/internal/controller/movie"
 	metadatagateway "movieexample.com/movie/internal/gateway/metadata/grpc"
 	ratinggateway "movieexample.com/movie/internal/gateway/rating/grpc"
 	grpchandler "movieexample.com/movie/internal/handler/grpc"
 	"movieexample.com/pkg/discovery"
-	"movieexample.com/pkg/discovery/consul"
+
+	// "movieexample.com/pkg/discovery/consul"
+	"movieexample.com/pkg/discovery/discmemory"
 )
 
 const serviceName = "movie"
 
 func main() {
-	var port int
+	// var port int
 
-	flag.IntVar(&port, "port", 8083, "API handler port")
-	flag.Parse()
-	log.Printf("Starting the movie service on port %d", port)
+	// flag.IntVar(&port, "port", 8083, "API handler port")
+	// flag.Parse()
+	// log.Printf("Starting the movie service on port %d", port)
 
-	registry, err := consul.NewRegistry("localhost:8500")
+	f, err := os.Open("./base.yaml")
 	if err != nil {
 		panic(err)
 	}
+	defer f.Close()
+
+	var cfg serviceConfig
+	if err := yaml.NewDecoder(f).Decode(&cfg); err != nil {
+		panic(err)
+	}
+
+	port := cfg.APIConfig.Port
+	log.Printf("Starting the movie service at %d.\n", port)
+
+	// registry, err := consul.NewRegistry("localhost:8500")
+	// if err != nil {
+	// 	panic(err)
+	// }
+
+	registry := discmemory.NewRegistry()
 
 	ctx := context.Background()
 	instanceID := discovery.GenerateInstanceID(serviceName)
@@ -61,6 +83,7 @@ func main() {
 	}
 
 	srv := grpc.NewServer()
+	reflection.Register(srv)
 	gen.RegisterMovieServiceServer(srv, h)
 	if err := srv.Serve(lis); err != nil {
 		panic(err)

@@ -2,6 +2,10 @@ package main
 
 import (
 	"context"
+	"os/signal"
+	"sync"
+	"syscall"
+
 	// "flag"
 	"fmt"
 	"log"
@@ -36,7 +40,7 @@ func main() {
 	// flag.Parse()
 	// log.Printf("Starting the rating service on port %d", port)
 
-	f, err := os.Open("base.yaml")
+	f, err := os.Open("../configs/base.yaml")
 	if err != nil {
 		panic(err)
 	}
@@ -62,7 +66,7 @@ func main() {
 
 	registry := discmemory.NewRegistry()
 
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
 	instanceID := discovery.GenerateInstanceID(serviceName)
 	if err := registry.Register(ctx, instanceID, serviceName, fmt.Sprintf("localhost:%d", port)); err != nil {
 		panic(err)
@@ -104,7 +108,29 @@ func main() {
 	srv := grpc.NewServer()
 	reflection.Register(srv)
 	gen.RegisterRatingServiceServer(srv, h)
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+
+	var wg sync.WaitGroup
+
+	wg.Add(1)
+
+	go func() {
+		defer wg.Done()
+
+		s := <-sigChan
+
+		cancel()
+
+		log.Printf("Received signal %v, attempting graceful shutdown.", s)
+		srv.GracefulStop()
+		log.Println("Gracefully stopped gRPC server.")
+	}()
+
 	if err := srv.Serve(lis); err != nil {
 		panic(err)
 	}
+
+	wg.Wait()
 }

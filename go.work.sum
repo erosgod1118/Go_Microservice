@@ -1,1 +1,3 @@
+go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.34.0 h1:PNEMW4EvpNQ7SuoPFNkvbZqi1STkTPKq+8vfoMl/6AE=
+go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.34.0/go.mod h1:fk1+icoN47ytLSgkoWHLJrtVTSQ+HgmkNgPTKrk/Nsc=
 google.golang.org/genproto v0.0.0-20230822172742-b8732ec3820d h1:VBu5YqKPv6XiJ199exd8Br+Aetz+o08F+PLMnwJQHAY=

@@ -10,6 +10,9 @@ import (
 	"net"
 	"time"
 
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 	"gopkg.in/yaml.v3"
@@ -20,9 +23,10 @@ import (
 	grpchandler "movieexample.com/metadata/internal/handler/grpc"
 	"movieexample.com/metadata/internal/repository/memory"
 	"movieexample.com/pkg/discovery"
+	"movieexample.com/pkg/tracing"
 
-	// "movieexample.com/pkg/discovery/consul"
-	"movieexample.com/pkg/discovery/discmemory"
+	"movieexample.com/pkg/discovery/consul"
+	// "movieexample.com/pkg/discovery/discmemory"
 )
 
 const serviceName = "metadata"
@@ -34,7 +38,7 @@ func main() {
 	// flag.Parse()
 	// log.Printf("Starting the metadata service on port %d", port)
 
-	f, err := os.Open("base.yaml")
+	f, err := os.Open("../configs/base.yaml")
 	if err != nil {
 		panic(err)
 	}
@@ -48,14 +52,29 @@ func main() {
 	port := cfg.APIConfig.Port
 	log.Printf("Starting the metadata service at %d.\n", port)
 
-	// registry, err := consul.NewRegistry("localhost:8500")
-	// if err != nil {
-	// 	panic(err)
-	// }
+	registry, err := consul.NewRegistry("localhost:8500")
+	if err != nil {
+		panic(err)
+	}
 
-	registry := discmemory.NewRegistry()
+	// registry := discmemory.NewRegistry()
 
 	ctx := context.Background()
+
+	tp, err := tracing.NewJaegerProvider(cfg.Jaeger.URL, serviceName)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	defer func() {
+		if err := tp.Shutdown(ctx); err != nil {
+			log.Fatal(err)
+		}
+	}()
+
+	otel.SetTracerProvider(tp)
+	otel.SetTextMapPropagator(propagation.TraceContext{})
+
 	instanceID := discovery.GenerateInstanceID(serviceName)
 	if err := registry.Register(ctx, instanceID, serviceName, fmt.Sprintf("localhost:%d", port)); err != nil {
 		panic(err)
@@ -82,7 +101,7 @@ func main() {
 		log.Fatalf("failed to listen: %v", err)
 	}
 
-	srv := grpc.NewServer()
+	srv := grpc.NewServer(grpc.UnaryInterceptor(otelgrpc.UnaryServerInterceptor()))
 	reflection.Register(srv)
 	gen.RegisterMetadataServiceServer(srv, h)
 	if err := srv.Serve(lis); err != nil {

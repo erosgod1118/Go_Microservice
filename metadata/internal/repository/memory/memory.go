@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync"
 
+	"go.opentelemetry.io/otel"
 	"movieexample.com/metadata/internal/repository"
 	"movieexample.com/metadata/pkg/model"
 )
@@ -17,9 +18,14 @@ func New() *Repository {
 	return &Repository{data: map[string]*model.Metadata{}}
 }
 
-func (r *Repository) Get(_ context.Context, id string) (*model.Metadata, error) {
+const tracerID = "metadata-repository-memory"
+
+func (r *Repository) Get(ctx context.Context, id string) (*model.Metadata, error) {
 	r.RLock()
 	defer r.RUnlock()
+
+	_, span := otel.Tracer(tracerID).Start(ctx, "Repository/Get")
+	defer span.End()
 
 	m, ok := r.data[id]
 	if !ok {
@@ -29,9 +35,12 @@ func (r *Repository) Get(_ context.Context, id string) (*model.Metadata, error) 
 	return m, nil
 }
 
-func (r *Repository) Put(_ context.Context, id string, metadata *model.Metadata) error {
+func (r *Repository) Put(ctx context.Context, id string, metadata *model.Metadata) error {
 	r.Lock()
 	defer r.Unlock()
+
+	_, span := otel.Tracer(tracerID).Start(ctx, "Repository/Put")
+	defer span.End()
 
 	r.data[id] = metadata
 

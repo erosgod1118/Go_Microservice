@@ -10,7 +10,9 @@ import (
 	"net"
 	"time"
 
-	"github.com/grpc-ecosystem/go-grpc-middleware/ratelimit"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 	"golang.org/x/time/rate"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
@@ -21,9 +23,10 @@ import (
 	ratinggateway "movieexample.com/movie/internal/gateway/rating/grpc"
 	grpchandler "movieexample.com/movie/internal/handler/grpc"
 	"movieexample.com/pkg/discovery"
+	"movieexample.com/pkg/tracing"
 
-	// "movieexample.com/pkg/discovery/consul"
-	"movieexample.com/pkg/discovery/discmemory"
+	"movieexample.com/pkg/discovery/consul"
+	// "movieexample.com/pkg/discovery/discmemory"
 )
 
 const serviceName = "movie"
@@ -53,14 +56,29 @@ func main() {
 	port := cfg.APIConfig.Port
 	log.Printf("Starting the movie service at %d.\n", port)
 
-	// registry, err := consul.NewRegistry("localhost:8500")
-	// if err != nil {
-	// 	panic(err)
-	// }
-
-	registry := discmemory.NewRegistry()
-
 	ctx := context.Background()
+
+	tp, err := tracing.NewJaegerProvider(cfg.Jaeger.URL, serviceName)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	defer func() {
+		if err := tp.Shutdown(ctx); err != nil {
+			log.Fatal(err)
+		}
+	}()
+
+	otel.SetTracerProvider(tp)
+	otel.SetTextMapPropagator(propagation.TraceContext{})
+
+	// registry := discmemory.NewRegistry()
+
+	registry, err := consul.NewRegistry("localhost:8500")
+	if err != nil {
+		panic(err)
+	}
+
 	instanceID := discovery.GenerateInstanceID(serviceName)
 	if err := registry.Register(ctx, instanceID, serviceName, fmt.Sprintf("localhost:%d", port)); err != nil {
 		panic(err)
@@ -88,11 +106,12 @@ func main() {
 		log.Fatalf("failed to listen: %v", err)
 	}
 
-	const limit = 100
-	const burst = 100
+	// const limit = 100
+	// const burst = 100
 
-	l := newLimiter(limit, burst)
-	srv := grpc.NewServer(grpc.UnaryInterceptor(ratelimit.UnaryServerInterceptor(l)))
+	// l := newLimiter(limit, burst)
+	// srv := grpc.NewServer(grpc.UnaryInterceptor(ratelimit.UnaryServerInterceptor(l)))
+	srv := grpc.NewServer(grpc.UnaryInterceptor(otelgrpc.UnaryServerInterceptor()))
 
 	reflection.Register(srv)
 	gen.RegisterMovieServiceServer(srv, h)

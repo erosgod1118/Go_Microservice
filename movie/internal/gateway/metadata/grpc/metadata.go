@@ -21,6 +21,7 @@ func New(registry discovery.Registry) *Gateway {
 
 func (g *Gateway) Get(ctx context.Context, id string) (*model.Metadata, error) {
 	conn, err := grpcutil.ServiceConnection(ctx, "metadata", g.registry)
+
 	if err != nil {
 		return nil, err
 	}

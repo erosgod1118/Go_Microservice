@@ -32,6 +32,7 @@ func New(ratingGateway ratingGateway, metadataGateway metadataGateway) *Controll
 
 func (c *Controller) Get(ctx context.Context, id string) (*model.MovieDetails, error) {
 	metadata, err := c.metadataGateway.Get(ctx, id)
+
 	if err != nil && errors.Is(err, gateway.ErrNotFound) {
 		return nil, ErrNotFound
 	} else if err != nil {

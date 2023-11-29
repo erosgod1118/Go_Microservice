@@ -4,7 +4,7 @@ import (
 	"context"
 	"math/rand"
 
-	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+	// "go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"movieexample.com/pkg/discovery"
@@ -19,6 +19,6 @@ func ServiceConnection(ctx context.Context, serviceName string, registry discove
 	return grpc.Dial(
 		addrs[rand.Intn(len(addrs))],
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithUnaryInterceptor(otelgrpc.UnaryClientInterceptor()),
+		// grpc.WithUnaryInterceptor(otelgrpc.UnaryClientInterceptor()),
 	)
 }

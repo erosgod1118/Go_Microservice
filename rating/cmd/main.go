@@ -14,15 +14,16 @@ import (
 	"time"
 
 	// "github.com/joho/godotenv"
-	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/propagation"
+	// "go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+	// "go.opentelemetry.io/otel"
+	// "go.opentelemetry.io/otel/propagation"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 	"gopkg.in/yaml.v3"
 	"movieexample.com/gen"
 	"movieexample.com/pkg/discovery"
-	"movieexample.com/pkg/tracing"
+
+	// "movieexample.com/pkg/tracing"
 
 	"movieexample.com/pkg/discovery/consul"
 	// "movieexample.com/pkg/discovery/discmemory"
@@ -72,19 +73,19 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	tp, err := tracing.NewJaegerProvider(cfg.Jaeger.URL, serviceName)
-	if err != nil {
-		log.Fatal(err)
-	}
+	// tp, err := tracing.NewJaegerProvider(cfg.Jaeger.URL, serviceName)
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
 
-	defer func() {
-		if err := tp.Shutdown(ctx); err != nil {
-			log.Fatal(err)
-		}
-	}()
+	// defer func() {
+	// 	if err := tp.Shutdown(ctx); err != nil {
+	// 		log.Fatal(err)
+	// 	}
+	// }()
 
-	otel.SetTracerProvider(tp)
-	otel.SetTextMapPropagator(propagation.TraceContext{})
+	// otel.SetTracerProvider(tp)
+	// otel.SetTextMapPropagator(propagation.TraceContext{})
 
 	instanceID := discovery.GenerateInstanceID(serviceName)
 	if err := registry.Register(ctx, instanceID, serviceName, fmt.Sprintf("localhost:%d", port)); err != nil {
@@ -124,7 +125,8 @@ func main() {
 		log.Fatalf("failed to listen: %v", err)
 	}
 
-	srv := grpc.NewServer(grpc.UnaryInterceptor(otelgrpc.UnaryServerInterceptor()))
+	// srv := grpc.NewServer(grpc.UnaryInterceptor(otelgrpc.UnaryServerInterceptor()))
+	srv := grpc.NewServer()
 	reflection.Register(srv)
 	gen.RegisterRatingServiceServer(srv, h)
 

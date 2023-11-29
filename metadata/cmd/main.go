@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"net/http"
 	"os"
 
 	// "flag"
@@ -10,9 +11,13 @@ import (
 	"net"
 	"time"
 
-	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/propagation"
+	// "go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+	// "go.opentelemetry.io/otel"
+	// "go.opentelemetry.io/otel/propagation"
+
+	"github.com/uber-go/tally"
+	"github.com/uber-go/tally/prometheus"
+	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 	"gopkg.in/yaml.v3"
@@ -23,7 +28,8 @@ import (
 	grpchandler "movieexample.com/metadata/internal/handler/grpc"
 	"movieexample.com/metadata/internal/repository/memory"
 	"movieexample.com/pkg/discovery"
-	"movieexample.com/pkg/tracing"
+
+	// "movieexample.com/pkg/tracing"
 
 	"movieexample.com/pkg/discovery/consul"
 	// "movieexample.com/pkg/discovery/discmemory"
@@ -32,6 +38,9 @@ import (
 const serviceName = "metadata"
 
 func main() {
+	logger, _ := zap.NewProduction()
+	defer logger.Sync()
+
 	// var port int
 
 	// flag.IntVar(&port, "port", 8081, "API handler port")
@@ -61,19 +70,40 @@ func main() {
 
 	ctx := context.Background()
 
-	tp, err := tracing.NewJaegerProvider(cfg.Jaeger.URL, serviceName)
-	if err != nil {
-		log.Fatal(err)
-	}
+	// tp, err := tracing.NewJaegerProvider(cfg.Jaeger.URL, serviceName)
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
 
-	defer func() {
-		if err := tp.Shutdown(ctx); err != nil {
-			log.Fatal(err)
+	// defer func() {
+	// 	if err := tp.Shutdown(ctx); err != nil {
+	// 		log.Fatal(err)
+	// 	}
+	// }()
+
+	// otel.SetTracerProvider(tp)
+	// otel.SetTextMapPropagator(propagation.TraceContext{})
+
+	reporter := prometheus.NewReporter(prometheus.Options{})
+
+	scope, closer := tally.NewRootScope(tally.ScopeOptions{
+		Tags:           map[string]string{"service": "metadata"},
+		CachedReporter: reporter,
+	}, 10*time.Second)
+	defer closer.Close()
+
+	http.Handle("/metrics", reporter.HTTPHandler())
+
+	go func() {
+		if err := http.ListenAndServe(fmt.Sprintf(":%d", cfg.Prometheus.MetricsPort), nil); err != nil {
+			logger.Fatal("Failed to start the metric handler.", zap.Error(err))
 		}
 	}()
 
-	otel.SetTracerProvider(tp)
-	otel.SetTextMapPropagator(propagation.TraceContext{})
+	counter := scope.Tagged(map[string]string{
+		"service": "metadata",
+	}).Counter("service_started")
+	counter.Inc(23)
 
 	instanceID := discovery.GenerateInstanceID(serviceName)
 	if err := registry.Register(ctx, instanceID, serviceName, fmt.Sprintf("localhost:%d", port)); err != nil {
@@ -101,7 +131,8 @@ func main() {
 		log.Fatalf("failed to listen: %v", err)
 	}
 
-	srv := grpc.NewServer(grpc.UnaryInterceptor(otelgrpc.UnaryServerInterceptor()))
+	// srv := grpc.NewServer(grpc.UnaryInterceptor(otelgrpc.UnaryServerInterceptor()))
+	srv := grpc.NewServer()
 	reflection.Register(srv)
 	gen.RegisterMetadataServiceServer(srv, h)
 	if err := srv.Serve(lis); err != nil {

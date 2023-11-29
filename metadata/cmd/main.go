@@ -2,13 +2,15 @@ package main
 
 import (
 	"context"
-	"net/http"
-	"os"
-
-	// "flag"
+	"crypto/md5"
+	"flag"
 	"fmt"
 	"log"
+	"math/rand"
 	"net"
+	"net/http"
+	_ "net/http/pprof"
+	"os"
 	"time"
 
 	// "go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
@@ -37,6 +39,14 @@ import (
 
 const serviceName = "metadata"
 
+func heavyOperation() {
+	for {
+		token := make([]byte, 1024)
+		rand.Read(token)
+		md5.New().Write(token)
+	}
+}
+
 func main() {
 	logger, _ := zap.NewProduction()
 	defer logger.Sync()
@@ -46,6 +56,18 @@ func main() {
 	// flag.IntVar(&port, "port", 8081, "API handler port")
 	// flag.Parse()
 	// log.Printf("Starting the metadata service on port %d", port)
+
+	simulateCPULoad := flag.Bool("simulatecpuload", false, "simulate CPU load for profiling")
+	flag.Parse()
+	if *simulateCPULoad {
+		go heavyOperation()
+	}
+
+	go func() {
+		if err := http.ListenAndServe("localhost:6060", nil); err != nil {
+			logger.Fatal("Failed to start profiler handler", zap.Error(err))
+		}
+	}()
 
 	f, err := os.Open("../configs/base.yaml")
 	if err != nil {
